@@ -1,0 +1,48 @@
+Data_Path = 'D:\DTU Data\EEG\'; % 数据集路径
+Subject_ID = 1; % 用户编号
+window_duration = 1; % 时间窗长度/s
+sampling_rate = 512; % 采样率/Hz
+trial_time = 50; % 每个trial的持续时间/s
+
+%% 数据及重要索引读取
+all_data = load([Data_Path,'S',num2str(Subject_ID),'.mat']);
+raw_EEG_data = all_data.data.eeg{1}; % 读取原始EEG数据
+attend_mf_label = all_data.expinfo.attend_mf; % 听觉注意Speaker标签
+attend_lr_label = all_data.expinfo.attend_lr; % 听觉注意左右耳标签
+trial_trigger = all_data.expinfo.trigger; % 事件触发编码
+n_speakers = all_data.expinfo.n_speakers; % 参与说话个数，其==2为有效trial
+sample_cue = all_data.data.event.eeg.sample; % 每个trial起始采样点数
+sample_trigger = all_data.data.event.eeg.value; % 每个trial的对应触发编码
+sample_trigger = cell2mat(sample_trigger);
+
+%% 删除非听觉任务的Trial：n_speakers == 1
+id = n_speakers(:) == 1; % 提取非任务的trial编号
+attend_mf_label(id) = [];
+attend_lr_label(id) = [];
+trial_trigger(id) = [];
+
+%% 根据trial_trigger读取听觉注意任务的索引
+trial_ID = zeros(1, length(trial_trigger)); % 初始化结果向量
+startIndex = 1; % 初始化搜索的起始索引
+for i = 1:length(trial_trigger)
+    foundIndex = find(sample_trigger(startIndex:end) == trial_trigger(i), 1) + startIndex - 1;
+    if isempty(foundIndex) % 检查是否找到索引
+        error('未找到匹配的索引。');
+    else
+        trial_ID(i) = foundIndex;
+        startIndex = foundIndex + 1;
+    end
+end
+trial_cue = sample_cue(trial_ID); % 听觉任务的cue
+
+%% 分割数据集
+trial_num = size(trial_cue,1); % 读取trial个数
+window_size = sampling_rate * window_duration; % 裁切窗口大小
+sample_num = round(trial_time/window_duration); % 样本的总个数
+
+for trial = 1:trial_num
+    for sample = 1:sample_num
+        I = raw_EEG_data((trial_cue(trial)):right_cut_cue,:);
+        cnt_subject_train(sample, :, :) = I';
+    end
+end
